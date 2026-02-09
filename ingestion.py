@@ -1,13 +1,15 @@
 import os
+
 import uuid
 from qdrant_client import QdrantClient, models
-from fastembed import TextEmbedding, SparseTextEmbedding
+from fastembed import TextEmbedding, SparseTextEmbedding, LateInteractionTextEmbedding
 from dotenv import load_dotenv
 
 load_dotenv()
 
 SPARSE_MODEL = "Qdrant/bm25"
 DENSE_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+COLBERT_MODEL = "colbert-ir/colbertv2.0"
 COLLECTION_NAME = "financial"
 FILE_PATH = "./AAPL_10-K_1A_temp.md"
 
@@ -18,7 +20,14 @@ qdrant.delete_collection(collection_name=COLLECTION_NAME)
 qdrant.create_collection(
     collection_name=COLLECTION_NAME,
     vectors_config={
-        "dense": models.VectorParams(size=384, distance=models.Distance.COSINE)
+        "dense": models.VectorParams(size=384, distance=models.Distance.COSINE),
+        "colbert": models.VectorParams(
+            size=128,
+            distance=models.Distance.COSINE,
+            multivector_config=models.MultiVectorConfig(
+                comparator=models.MultiVectorComparator.MAX_SIM
+            ),
+        ),
     },
     sparse_vectors_config={"sparse": models.SparseVectorParams()},
 )
@@ -31,6 +40,7 @@ chunks = [p.strip() for p in paragraphs if len(p.strip()) > 50]
 
 dense_model = TextEmbedding(model_name=DENSE_MODEL)
 sparse_model = SparseTextEmbedding(model_name=SPARSE_MODEL)
+colbert_model = LateInteractionTextEmbedding(model_name=COLBERT_MODEL)
 
 points = []
 for chunk in chunks:
@@ -40,13 +50,15 @@ for chunk in chunks:
     )[
         0
     ].as_object()  ## transformar a sparse embedding em um formato que o Qdrant aceita (indice e valores -> o resto é 0)
+    colbert_embedding = list(colbert_model.passage_embed([chunk]))[0].tolist()
 
     point = models.PointStruct(
         id=str(uuid.uuid4()),
         vector={
             "dense": dense_embedding,
             "sparse": sparse_embedding,
-        },  ## cada point carrega 2 tipos de vetores
+            "colbert": colbert_embedding,
+        },
         payload={"text": chunk, "source": FILE_PATH},
     )
     points.append(point)
