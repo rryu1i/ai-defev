@@ -70,21 +70,31 @@ query_text = "What are the main financial risks?"
 
 query_dense = list(dense_model.passage_embed([query_text]))[0].tolist()
 query_sparse = list(sparse_model.passage_embed([query_text]))[0].as_object()
+query_colbert = list(colbert_model.passage_embed([query_text]))[0].tolist()
 
 
 results = qdrant.query_points(
     collection_name=COLLECTION_NAME,
-    prefetch=[  ## uma pre-busca
-        {"query": query_dense, "using": "dense", "limit": 10},
-        {"query": query_sparse, "using": "sparse", "limit": 10},
+    prefetch=[
+        {
+            "prefetch": [  ## uma pre-busca
+                {"query": query_dense, "using": "dense", "limit": 10},
+                {"query": query_sparse, "using": "sparse", "limit": 10},
+            ],
+            "query": models.FusionQuery(
+                fusion=models.Fusion.RRF
+            ),  ## combinar os resultados das buscas densa e esparsa usando a RRF )
+            "limit": 20,
+        }
     ],
-    query=models.FusionQuery(
-        fusion=models.Fusion.RRF
-    ),  ## combinar os resultados das buscas densa e esparsa usando a RRF )
+    query=query_colbert,
+    using="colbert",
     limit=3,
 )
 
+max_score = max(r.score for r in results.points)
+
 for r in results.points:
-    print(f"Score: {r.score}")
+    print(f"Score: {r.score} (Normalized: {r.score / max_score})")
     print(f"Payload: {r.payload['text']}")
     print("-" * 50)
