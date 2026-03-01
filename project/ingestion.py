@@ -4,8 +4,8 @@ import uuid
 from dotenv import load_dotenv
 from fastembed import TextEmbedding, SparseTextEmbedding, LateInteractionTextEmbedding
 from qdrant_client import QdrantClient, models
-from utils.semantic_chunker import SemanticChunker
-from utils.edgar_client import EdgarClient
+from semantic_chunker import SemanticChunker
+from edgar_client import EdgarClient
 
 load_dotenv()
 
